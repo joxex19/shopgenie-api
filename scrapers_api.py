@@ -81,5 +81,6 @@ def api_mercadona():
 
 
 if __name__ == "__main__":
-    print("\n🚀 API Mercadona corriendo en http://localhost:5000/api/mercadona")
-    app.run(debug=True)
+    print("\n🚀 API Mercadona corriendo en http://0.0.0.0:5000/api/mercadona")
+    app.run(host="0.0.0.0", port=5000, debug=True)
+
