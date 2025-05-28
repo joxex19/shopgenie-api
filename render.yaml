@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: shopgenie-api
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python scrapers_api.py
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "true"
