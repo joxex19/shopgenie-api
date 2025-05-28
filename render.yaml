@@ -3,8 +3,11 @@ services:
     name: shopgenie-api
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: |
+      apt-get update && \
+      apt-get install -y chromium chromium-driver && \
+      pip install -r requirements.txt
     startCommand: python scrapers_api.py
     envVars:
       - key: PYTHONUNBUFFERED
-        value: "true"
+        value: "1"

@@ -1,18 +1,22 @@
-# -*- coding: utf-8 -*-
-
 from flask import Flask, request, jsonify
-from seleniumbase import Driver
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 from bs4 import BeautifulSoup
 import time
-import json
-import os
 
 app = Flask(__name__)
 
+def scrape_mercadona_products(search_term, max_pages=2):
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--window-size=1920x1080")
+    options.binary_location = "/usr/bin/chromium"
 
-def scrape_mercadona_products(search_term, max_pages=3):
-    driver = Driver(uc=True, headless=True)
+    driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
     driver.get(f"https://tienda.mercadona.es/search-results?query={search_term}")
     time.sleep(5)
 
@@ -21,44 +25,38 @@ def scrape_mercadona_products(search_term, max_pages=3):
 
     for _ in range(max_pages):
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(3)
+        time.sleep(2)
 
-    contenedor_productos = driver.find_elements(By.CSS_SELECTOR, 'div.product-cell[data-testid="product-cell"]')
-    print(f"[Mercadona] Productos encontrados: {len(contenedor_productos)}")
+    elementos = driver.find_elements(By.CSS_SELECTOR, 'div.product-cell[data-testid="product-cell"]')
+    for el in elementos:
+        html = el.get_attribute("innerHTML")
+        soup = BeautifulSoup(html, "html.parser")
 
-    for prod in contenedor_productos:
+        nombre_tag = soup.find("h4")
+        precio_tag = soup.find("p", {"data-testid": "product-price"})
+        img_tag = soup.find("img")
+
+        nombre = nombre_tag.get_text(strip=True) if nombre_tag else None
+        precio_str = precio_tag.get_text(strip=True).replace("€", "").replace(",", ".") if precio_tag else "0"
+        imagen = img_tag["src"] if img_tag else None
+
+        if not nombre or nombre in vistos:
+            continue
+        vistos.add(nombre)
+
         try:
-            html = prod.get_attribute("innerHTML")
-            soup = BeautifulSoup(html, "html.parser")
-
-            nombre_tag = soup.find("h4")
-            precio_tag = soup.find("p", {"data-testid": "product-price"})
-            img_tag = soup.find("img")
-
-            nombre = nombre_tag.get_text(strip=True) if nombre_tag else None
-            precio_str = precio_tag.get_text(strip=True).replace("\u20ac", "").replace(",", ".") if precio_tag else "0"
-            imagen = img_tag["src"] if img_tag else None
-
-            if not nombre or nombre in vistos:
+            precio_float = float(precio_str)
+            if precio_float > 10:  # Evita precios raros
                 continue
-            vistos.add(nombre)
+        except ValueError:
+            continue
 
-            try:
-                precio_float = float(precio_str)
-                if precio_float > 10:
-                    continue
-            except ValueError:
-                continue
-
-            productos.append({
-                'nombre': nombre,
-                'precio': precio_float,
-                'supermercado': 'Mercadona',
-                'imagen': imagen
-            })
-
-        except Exception as e:
-            print(f"[Mercadona] Error procesando producto: {e}")
+        productos.append({
+            "nombre": nombre,
+            "precio": precio_float,
+            "supermercado": "Mercadona",
+            "imagen": imagen
+        })
 
     driver.quit()
     return productos
@@ -68,19 +66,17 @@ def scrape_mercadona_products(search_term, max_pages=3):
 def api_mercadona():
     query = request.args.get("productos")
     if not query:
-        return jsonify({"error": "Parámetro '?productos=' requerido"}), 400
+        return jsonify({"error": "Falta el parámetro '?productos='"}), 400
 
     terms = [x.strip() for x in query.split(",") if x.strip()]
     resultado = []
-
     for term in terms:
-        print(f"\n🔎 Buscando: {term}")
         resultado.extend(scrape_mercadona_products(term))
 
     return jsonify(resultado)
 
 
 if __name__ == "__main__":
-    print("\n🚀 API Mercadona corriendo en http://0.0.0.0:5000/api/mercadona")
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    print("🚀 API de Mercadona lista en http://localhost:5000/api/mercadona")
+    app.run(host="0.0.0.0", port=5000)
 
